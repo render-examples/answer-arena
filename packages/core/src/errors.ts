@@ -17,6 +17,7 @@ export type ProviderErrorCode =
   | "rate_limited"
   | "auth"
   | "invalid_model"
+  | "input_too_long"
   | "provider_unavailable";
 
 /** Beginner-readable hint appended to the upstream text for each known code. */
@@ -25,8 +26,48 @@ const PROVIDER_CODE_HINTS: Record<ProviderErrorCode, string> = {
   rate_limited: "Wait a moment or run fewer setups.",
   auth: "Check OPENROUTER_API_KEY.",
   invalid_model: "Pick a different model.",
+  input_too_long:
+    "This embedding model's context is shorter than the document chunks. Pick a model with a larger context window.",
   provider_unavailable: "Retry when the provider is available.",
 };
+
+/** Maps HTTP status (and optional body text) to a stable provider error code. */
+export function classifyProviderHttpStatus(
+  status: number,
+  bodyText?: string
+): ProviderErrorCode | undefined {
+  if (status === 402) return "insufficient_credits";
+  if (status === 429) return "rate_limited";
+  if (status === 401 || status === 403) return "auth";
+  if (status === 404) return "invalid_model";
+  if (status === 400) {
+    const body = bodyText ?? "";
+    if (/token/i.test(body) && /exceed/i.test(body)) return "input_too_long";
+    return /model/i.test(body) ? "invalid_model" : undefined;
+  }
+  if (status >= 500) return "provider_unavailable";
+  return undefined;
+}
+
+/** True when retrying the same call cannot succeed. */
+export function isNonRetryableProviderError(error: unknown): boolean {
+  if (!(error instanceof ProviderCallError)) return false;
+  if (
+    error.status === 400 ||
+    error.status === 401 ||
+    error.status === 403 ||
+    error.status === 404 ||
+    error.status === 402
+  ) {
+    return true;
+  }
+  return (
+    error.code === "invalid_model" ||
+    error.code === "input_too_long" ||
+    error.code === "auth" ||
+    error.code === "insufficient_credits"
+  );
+}
 
 /**
  * Upstream bodies are echoed to operators, so drop anything token-shaped before

@@ -4,6 +4,7 @@ import {
   CostOperationError,
   ProviderCallError,
   WorkflowDispatchError,
+  isNonRetryableProviderError,
   providerErrorDetail,
   safePersistedError,
 } from "../dist/errors.js";
@@ -36,6 +37,19 @@ test("provider failures keep the upstream reason without repetitive error text",
     safePersistedError(missingModel, "Trial failed"),
     "OpenRouter /chat/completions failed with HTTP 404: No endpoints found for anthropic/claude-fable-5 · Pick a different model."
   );
+
+  const tooLong = new ProviderCallError(
+    "OpenRouter /embeddings failed with HTTP 400",
+    false,
+    400,
+    undefined,
+    "input_too_long",
+    undefined,
+    "Embedding input has 835 tokens, exceeding the model maximum of 512."
+  );
+  assert.match(safePersistedError(tooLong, "Trial failed"), /larger context window/);
+  assert.equal(isNonRetryableProviderError(tooLong), true);
+  assert.equal(isNonRetryableProviderError(rateLimited), false);
 });
 
 test("duplicate provider detail is shown once", () => {

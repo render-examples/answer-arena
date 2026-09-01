@@ -1,5 +1,7 @@
 /** User-facing copy (single source of truth). */
 
+import { MIN_EMBEDDING_CONTEXT_LENGTH } from "@ragtime/core";
+
 export const FLOW_STEPS = [
   { label: "Choose a question", description: "Pick a sample or write your own" },
   {
@@ -101,6 +103,8 @@ export function friendlyError(raw: string, meta?: FriendlyErrorMeta): string {
       return "The model gateway rejected the request. Check the API key configuration.";
     case "invalid_model":
       return "One of the selected models is not available on the model gateway.";
+    case "input_too_long":
+      return "A document chunk is longer than the embedding model's context window. Pick an embedding model with a larger context.";
     case "provider_unavailable":
       return "The model gateway is temporarily unavailable. Try again shortly.";
     case "workflow_auth":
@@ -154,7 +158,7 @@ export const COPY = {
     embedLabel: "Embedding",
     embedHint: "Finds candidate passages",
     embedInfo:
-      "The embedding model turns your question and each passage into vectors, then finds the passages whose vectors are closest. This is the first-pass search.",
+      `The embedding model turns your question and each passage into vectors, then finds the passages whose vectors are closest. Pick a model with at least ${MIN_EMBEDDING_CONTEXT_LENGTH} tokens of context for this library.`,
     rerankLabel: "Rerank (optional)",
     rerankHint: "Reorders passages before answering",
     rerankInfo:

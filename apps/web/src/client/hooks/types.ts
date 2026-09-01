@@ -18,6 +18,7 @@ export type DemoInfo = {
 export type CatalogModel = {
   id: string;
   name: string;
+  contextLength?: number;
   pricing?: { prompt?: string; completion?: string; request?: string };
 };
 

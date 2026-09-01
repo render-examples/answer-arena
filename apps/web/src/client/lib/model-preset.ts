@@ -1,3 +1,4 @@
+import { MIN_EMBEDDING_CONTEXT_LENGTH } from "@ragtime/core";
 import type { Catalog, CatalogModel, Setup } from "../hooks/types";
 
 let setupSeq = 0;
@@ -48,6 +49,16 @@ function priced(
   );
 }
 
+/** Prefer embed models that can index current chunks; skip 512-token windows. */
+function embeddingsForStarter(models: CatalogModel[]): CatalogModel[] {
+  const pricedEmbeds = priced(sortByPrice(models, "prompt"), "prompt");
+  const fitsChunks = pricedEmbeds.filter(
+    (model) => (model.contextLength ?? 0) >= MIN_EMBEDDING_CONTEXT_LENGTH
+  );
+  if (fitsChunks.length > 0) return fitsChunks;
+  return pricedEmbeds.filter((model) => model.contextLength == null);
+}
+
 /**
  * Derives a starter preset from live catalog data only (no hardcoded slugs):
  * cheapest embedding by prompt price, plus budget, mid, and premium chat models
@@ -57,7 +68,7 @@ export function deriveStarterPreset(
   catalog: Catalog | undefined
 ): StarterPreset | null {
   if (!catalog) return null;
-  const embeddings = priced(sortByPrice(catalog.embedding, "prompt"), "prompt");
+  const embeddings = embeddingsForStarter(catalog.embedding);
   const chats = priced(sortByPrice(catalog.chat, "completion"), "completion");
   if (embeddings.length === 0 || chats.length === 0) return null;
 

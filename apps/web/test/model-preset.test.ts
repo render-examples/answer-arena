@@ -12,11 +12,20 @@ function chat(id: string, completion: string): CatalogModel {
   return { id, name: id, pricing: { prompt: "0.000001", completion } };
 }
 
-function catalogWith(chats: CatalogModel[]): Catalog {
+function embed(
+  id: string,
+  prompt: string,
+  contextLength?: number
+): CatalogModel {
+  return { id, name: id, contextLength, pricing: { prompt, completion: "0" } };
+}
+
+function catalogWith(
+  chats: CatalogModel[],
+  embeddings: CatalogModel[] = [embed("cheap/embed", "0")]
+): Catalog {
   return {
-    embedding: [
-      { id: "cheap/embed", name: "cheap/embed", pricing: { prompt: "0" } },
-    ],
+    embedding: embeddings,
     rerank: [],
     chat: chats,
     gateway: { id: "openrouter", label: "OpenRouter" },
@@ -55,4 +64,23 @@ test("starter setups and the judge skip models with no comparable price", () => 
 
 test("a catalog with no comparable prices yields no starter setups", () => {
   assert.deepEqual(deriveStarterSetups(catalogWith([chat("router/auto", "-1")])), []);
+});
+
+test("starter setups skip embedding models whose context is shorter than the chunks", () => {
+  const chats = [
+    chat("real/budget", "0.0000005"),
+    chat("real/mid", "0.000002"),
+  ];
+  const setups = deriveStarterSetups(
+    catalogWith(chats, [
+      embed("baai/bge-base-en-v1.5", "0.000000005", 512),
+      embed("baai/bge-m3", "0.00000001", 8194),
+    ])
+  );
+
+  assert.ok(setups.length > 0);
+  assert.ok(
+    setups.every((setup) => setup.embeddingModel === "baai/bge-m3"),
+    `expected bge-m3 starter embed, got ${setups.map((s) => s.embeddingModel).join(", ")}`
+  );
 });

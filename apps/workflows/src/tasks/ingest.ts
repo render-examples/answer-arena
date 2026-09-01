@@ -7,6 +7,7 @@ import {
 import {
   extractAndChunk,
   embedChunkBatch as pipelineEmbedBatch,
+  isNonRetryableProviderError,
   safePersistedError,
 } from "@ragtime/core";
 import {
@@ -85,7 +86,7 @@ export const embedChunkBatch = defineWorkflowTask(
     corpusId: string;
     model: string;
     chunkIds: string[];
-  }): Promise<{ embedded: number }> {
+  }): Promise<{ embedded: number; error?: string }> {
     maybeChaos();
     const db = getDb();
     const ports = createPipelinePorts();
@@ -109,7 +110,19 @@ export const embedChunkBatch = defineWorkflowTask(
       chunkIds: args.chunkIds,
       costController,
       operationKey: `corpus:${args.corpusId}:${batchKey}`,
+    }).catch((err: unknown) => {
+      if (!isNonRetryableProviderError(err)) throw err;
+      const message = safePersistedError(err, "Embedding failed");
+      emitEvent(db, args.runId, "embed.batch", {
+        model: args.model,
+        error: message,
+      });
+      return { embedded: 0, error: message } as const;
     });
+
+    if ("error" in result) {
+      return { embedded: 0, error: result.error };
+    }
 
     emitEvent(db, args.runId, "embed.batch", {
       model: args.model,
@@ -133,7 +146,7 @@ export const embedCorpus = defineWorkflowTask(
     runId: string;
     corpusId: string;
     model: string;
-  }): Promise<{ batches: number }> {
+  }): Promise<{ batches: number; error?: string }> {
     const db = getDb();
     const { embedBatchSize, embedFanoutBatch } = getAppConfig();
     const missing = await getMissingChunkIdsForModel(db, args.corpusId, args.model);
@@ -146,8 +159,19 @@ export const embedCorpus = defineWorkflowTask(
         chunkIds: ids,
       })
     );
-    if (waveResults.some((r) => r.status === "rejected")) {
-      throw new Error("One or more embed batches failed");
+    const embedError = waveResults.flatMap((result) => {
+      if (result.status === "rejected") {
+        return [
+          result.reason instanceof Error
+            ? result.reason.message
+            : "One or more embed batches failed",
+        ];
+      }
+      const value = result.value as { error?: string } | undefined;
+      return value?.error ? [value.error] : [];
+    })[0];
+    if (embedError) {
+      return { batches: batches.length, error: embedError };
     }
     return { batches: batches.length };
   }

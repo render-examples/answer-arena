@@ -171,7 +171,7 @@ export const runBakeoff = defineWorkflowTask(
         status: "failed",
         error: message,
       });
-      throw new Error(message);
+      return { status: "failed" };
     };
 
     let status = run.status;
@@ -224,6 +224,15 @@ export const runBakeoff = defineWorkflowTask(
         const current = await readStatus();
         if (terminalStatuses.has(current)) return { status: current };
         return await failPhase("ingesting", "Corpus embedding failed");
+      }
+      const embedError = embedResults
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => result.value.error)
+        .find((error): error is string => Boolean(error));
+      if (embedError) {
+        const current = await readStatus();
+        if (terminalStatuses.has(current)) return { status: current };
+        return await failPhase("ingesting", embedError);
       }
 
       const questionIds = config.questionIds;

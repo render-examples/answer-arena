@@ -85,6 +85,13 @@ export const CHUNK_TARGET_TOKENS = 800;
 export const CHUNK_OVERLAP_RATIO = 0.15;
 export const CHARS_PER_TOKEN_ESTIMATE = 4;
 
+/**
+ * Embedding models must fit persisted chunks. The char/4 estimate undercounts
+ * SciFact text (live chunks reached ~835 tokens), so the floor sits above the
+ * chunk target rather than matching it.
+ */
+export const MIN_EMBEDDING_CONTEXT_LENGTH = 1024;
+
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN_ESTIMATE);
 }

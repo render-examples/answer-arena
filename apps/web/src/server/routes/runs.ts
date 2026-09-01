@@ -11,6 +11,8 @@ import {
   checkRunAdmission,
   STRANDED_DRAFT_SECONDS,
   ABANDONED_RUN_SECONDS,
+  embeddingContextTooShortMessage,
+  tooShortEmbeddingModels,
 } from "@ragtime/core";
 import { createWorkflowDispatcher } from "@ragtime/composition";
 import {
@@ -30,6 +32,7 @@ import {
 import { getOwnedRun } from "../lib/ownership.js";
 import { asSessionRequest } from "../types.js";
 import { createRunPlan, getRunPlanRejection } from "./run-plan.js";
+import { getModelCatalog } from "../lib/catalog-cache.js";
 
 const { questions, runs, combos, trials } = schema;
 
@@ -84,6 +87,25 @@ export function registerRunRoutes(app: FastifyInstance): void {
     const rejection = getRunPlanRejection(plan, maxTrials);
     if (rejection) {
       return reply.status(rejection.statusCode).send({ error: rejection.error });
+    }
+
+    try {
+      const catalog = await getModelCatalog();
+      const tooShort = tooShortEmbeddingModels(
+        plan.config.embeddingModels,
+        catalog.embedding
+      );
+      if (tooShort[0]) {
+        return reply.status(400).send({
+          error: embeddingContextTooShortMessage(
+            tooShort[0].id,
+            tooShort[0].contextLength
+          ),
+          code: "input_too_long",
+        });
+      }
+    } catch {
+      // Catalog lookup is a guardrail, not a hard dependency of run creation.
     }
 
     let run: typeof runs.$inferSelect;

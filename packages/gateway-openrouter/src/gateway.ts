@@ -1,5 +1,6 @@
 import {
   ProviderCallError,
+  classifyProviderHttpStatus,
   providerErrorDetail,
   type CatalogWarning,
   type GatewayIdentity,
@@ -24,15 +25,7 @@ function classifyStatus(
   status: number,
   bodyText?: string
 ): ProviderErrorCode | undefined {
-  if (status === 402) return "insufficient_credits";
-  if (status === 429) return "rate_limited";
-  if (status === 401 || status === 403) return "auth";
-  if (status === 404) return "invalid_model";
-  if (status === 400) {
-    return /model/i.test(bodyText ?? "") ? "invalid_model" : undefined;
-  }
-  if (status >= 500) return "provider_unavailable";
-  return undefined;
+  return classifyProviderHttpStatus(status, bodyText);
 }
 
 function helpUrlForCode(code: ProviderErrorCode | undefined): string | undefined {

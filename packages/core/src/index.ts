@@ -4,6 +4,7 @@
  */
 export * from "./schemas.js";
 export * from "./prompts.js";
+export * from "./embedding-context.js";
 export * from "./config.js";
 export * from "./errors.js";
 export * from "./run-admission.js";
